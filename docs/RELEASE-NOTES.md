@@ -86,8 +86,16 @@ label is drawn in, `menu-font` the face of the root menu, each taking a
 fontconfig pattern — `Monospace:size=14`, `Noto Sans:bold:size=11` — in the
 config file or on the command line as `--tab-font=` and `--menu-font=`. There is
 no separate size key on purpose: the pattern already carries the size, and two
-ways of saying it could disagree. Leave either unset and you get exactly the
-face the previous release drew, character for character.
+ways of saying it could disagree.
+
+**The defaults are sized in pixels, so a remote session's DPI cannot change
+them.** `size=12` in a fontconfig pattern means twelve *points*, and a point is
+a fraction of an inch — so the actual pixel size depends on the DPI the X
+server reports, and a VNC or RDP server's DPI is not something either of us can
+predict. The same desktop could come up with a noticeably larger tab label on
+one viewer than on another. The shipped defaults now say `pixelsize=13`, which
+means thirteen pixels wherever it runs. A pattern you set yourself can still
+say `size=12` if that is what you want.
 
 A pattern fontconfig cannot resolve is substituted rather than refused, and the
 tab's fallback ladder is deliberately not configurable, so no font value can
@@ -100,12 +108,12 @@ new pattern has no usable face at all, the change is refused and the face you
 had stays loaded — you cannot end up with unlabelled tabs by mistyping a font
 name.
 
-**A silver palette with black text.** The defaults are now a single cool-cast
-family, `#C8CACC` for the tab and menu, `#DCDEE0` for the frame, `#A8ACB0` for
-the menu highlight. Every silver is very slightly blue — two parts per channel —
-which is what makes it read as metal rather than as concrete. On a 16-bit remote
-session that cast quantises away and you get plain grey, which is simply the
-older look rather than a broken one.
+**A silver palette with black text.** The defaults are a single cool-cast
+family, `#C8CACC` for the tab and menu and `#F0F1F3` for the frame and its
+button. Every silver is very slightly blue — the blue channel is the highest of
+the three in each of them — which is what makes it read as metal rather than as
+concrete. On a 16-bit remote session that cast quantises away and you get plain
+grey, which is simply the older look rather than a broken one.
 
 **Flat surfaces, as the original had them.** The tab, its button and the frame
 are each a single flat colour inside a one-pixel black outline. There is no

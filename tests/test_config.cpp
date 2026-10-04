@@ -93,8 +93,8 @@ TEST_CASE("Config defaults match upstream Config.h", "[config]") {
     REQUIRE(cfg.tabBackground == "#C8CACC");
 
     // Colors (frame) - 3 settings
-    REQUIRE(cfg.frameBackground == "#DCDEE0");
-    REQUIRE(cfg.buttonBackground == "#DCDEE0");
+    REQUIRE(cfg.frameBackground == "#F0F1F3");
+    REQUIRE(cfg.buttonBackground == "#F0F1F3");
     REQUIRE(cfg.borders == "#000000");
 
     // Colors (menu) - 4 settings
@@ -1225,19 +1225,26 @@ TEST_CASE("menu entries with no semicolon round-trip through the rendered value"
 // the source and recompiling.
 //
 // The default is asserted as a LITERAL rather than against a named constant,
-// deliberately. The whole promise of this plan to an existing user is that
-// nothing changes for them, and that promise is only kept if the default is
-// character-for-character the string the binary hardcoded. A comparison against
-// whatever the header happens to hold would keep passing after a silent drift.
+// deliberately: a comparison against whatever the header happens to hold would
+// keep passing after a silent drift, and the shipped font is a visual claim
+// that should have to be changed on purpose.
+//
+// WHAT THE LITERAL NOW IS, and what it is not. Plan 09-01 set these defaults
+// to the strings the binary had hardcoded, character for character, so that an
+// existing user saw no change at all. Quick task 261004-vp6 ended that: the
+// defaults are now sized in PIXELS rather than points, because a point size
+// follows the X server's reported DPI and a VNC server's DPI is not
+// predictable. The DPI claim itself is measured in tests/test_xft_poc.cpp; the
+// two cases below only pin which string ships.
 //
 // D-8.5-01: the spelling `tab-font` is permanent. Chosen over `font-tab`
 // because every existing key in this file is <subject>-<attribute>
 // (tab-foreground, menu-highlight, frame-background).
 // =============================================================================
 
-TEST_CASE("tab-font defaults to the pattern Border::loadTabFont hardcoded", "[config]") {
+TEST_CASE("tab-font defaults to the shipped pixel-sized pattern", "[config]") {
     Config cfg;
-    REQUIRE(cfg.tabFont == "Ubuntu,Noto Sans,DejaVu Sans,Sans:bold:size=12");
+    REQUIRE(cfg.tabFont == "DejaVu Sans:bold:pixelsize=13");
 }
 
 TEST_CASE("applyKeyValue sets tab-font verbatim", "[config]") {
@@ -1277,17 +1284,18 @@ TEST_CASE("CLI --tab-font sets string value", "[config][cli]") {
 // Font settings (plan 09-01): menu-font
 //
 // The sibling of tab-font above, and the same reasoning applies to all of it:
-// the default is the literal WindowManager::initialiseScreen() spelled inline,
-// asserted as a literal so a silent drift fails here; the spelling `menu-font`
-// is permanent under D-8.5-01; the value is a fontconfig pattern taken verbatim.
+// the default is asserted as a literal so a silent drift fails here; the
+// spelling `menu-font` is permanent under D-8.5-01; the value is a fontconfig
+// pattern taken verbatim; and as of quick task 261004-vp6 it is sized in
+// pixels for the reason written out above.
 //
 // Note the ONE difference from tab-font: this default carries no `:bold`. The
-// menu was never drawn bold and this plan does not change how anything looks.
+// menu was never drawn bold.
 // =============================================================================
 
-TEST_CASE("menu-font defaults to the pattern the menu font load hardcoded", "[config]") {
+TEST_CASE("menu-font defaults to the shipped pixel-sized pattern", "[config]") {
     Config cfg;
-    REQUIRE(cfg.menuFont == "Ubuntu,Noto Sans,DejaVu Sans,Sans:size=12");
+    REQUIRE(cfg.menuFont == "DejaVu Sans:pixelsize=13");
 }
 
 TEST_CASE("applyKeyValue sets menu-font verbatim", "[config]") {
