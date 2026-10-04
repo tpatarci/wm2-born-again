@@ -130,6 +130,19 @@ whichever tab background you configure, so a future look that wants one back
 would get shades belonging to your palette rather than a fixed near-white line.
 Nothing draws with them today.
 
+**The selected menu row is a solid bar, and its label inverts.** The row under
+the pointer — in the root menu and in a category submenu alike — is filled
+solid in the menu highlight colour, and that row's text is redrawn in the menu
+*background* colour so it reads clearly against the fill. Every other row keeps
+its ordinary text colour. The default highlight is `#000000`, so out of the box
+a selected row is a black bar with silver text on it; previously it was a pale
+grey tint with the ordinary text left sitting on top of it.
+
+One consequence worth knowing, since the colours are yours to set: if you set
+`menu-highlight` to the same value as `menu-background`, the bar and its text
+become the same colour and the selected row looks blank. Change either key back
+and it returns.
+
 All nine colours remain configurable in the config file and on the command line,
 and as of this release the two fonts, `tab-font` and `menu-font`, are
 configurable the same way. The nine, in full, so there is no "and the rest" for
@@ -144,7 +157,7 @@ you to go looking for:
 | `borders` | the outlines of the frame and the tab |
 | `menu-foreground` | the root menu's text |
 | `menu-background` | the root menu's background |
-| `menu-highlight` | the row of the root menu under the pointer |
+| `menu-highlight` | the bar filling the menu row under the pointer; that row's own label inverts to the menu background colour |
 | `menu-borders` | the root menu's border |
 
 Each takes anything the X server can parse — a name like `slategray`, or a

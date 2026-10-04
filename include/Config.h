@@ -32,10 +32,24 @@ struct Config {
     //
     // THE STEP IS NOT UNIFORM, and the arithmetic is written out here rather
     // than left as an almost-true rule of thumb. Counted channel by channel:
-    // #C8CACC steps by 2 and 2; #F0F1F3, the lighter frame this quick task
-    // introduced, steps by 1 and 2; #A8ACB0 steps by 4 and 4. The direction is
-    // what the family shares; the size of the step is not, and a comment
-    // claiming "by 2 per channel" was false of two of the three.
+    // #C8CACC steps by 2 and 2; #F0F1F3, the lighter frame quick task
+    // 261004-vp6 introduced, steps by 1 and 2. The direction is what the
+    // family shares; the size of the step is not, and a comment claiming "by 2
+    // per channel" was false of the values it covered.
+    //
+    // menuHighlight IS NOT A SILVER AND IS NOT A TINT. The selected menu row
+    // is a solid BAR (quick task 261004-vp6), and its label is drawn in
+    // menuBackground rather than menuForeground -- an inversion, not a shade
+    // behind unchanged text. Black is the default, which makes it equal to
+    // menuForeground; that is fine, because the selected row's text is the
+    // only thing drawn inside the bar and it uses the other colour.
+    //
+    // THE ONE SELF-INFLICTED WAY TO BREAK IT, named once rather than guarded:
+    // set menu-highlight equal to menu-background and your own selected label
+    // becomes invisible, because the bar and its ink are then the same colour.
+    // Reversible by changing one key, already reachable for any self-inverting
+    // palette, and a validator rejecting equal colours would be a policy about
+    // taste rather than a correctness check.
     //
     // The frame is LIGHTER than the tab on purpose. That value order is what
     // says "lit from above", and under the flat look (quick task 261004-vp6)
@@ -46,7 +60,10 @@ struct Config {
     // reads as stripes rather than sheen and either collapses or visibly bands
     // once VNC quantises it.
     //
-    // Every value keeps black text above 8.8:1 contrast.
+    // Every surface that carries black text keeps it above 8.8:1 contrast.
+    // The menu-highlight bar is the exception by construction: it carries no
+    // black text, because its label is drawn in menuBackground -- #C8CACC on
+    // black, which is about 12.8:1.
     // ------------------------------------------------------------------
 
     // Colors (tab)
@@ -59,7 +76,7 @@ struct Config {
     // Colors (menu)
     std::string menuForeground  = "#000000";
     std::string menuBackground  = "#C8CACC";
-    std::string menuHighlight   = "#A8ACB0";
+    std::string menuHighlight   = "#000000";
     std::string menuBorders     = "#000000";
 
     // ------------------------------------------------------------------

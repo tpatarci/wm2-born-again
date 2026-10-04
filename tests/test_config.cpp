@@ -100,7 +100,7 @@ TEST_CASE("Config defaults match upstream Config.h", "[config]") {
     // Colors (menu) - 4 settings
     REQUIRE(cfg.menuForeground == "#000000");
     REQUIRE(cfg.menuBackground == "#C8CACC");
-    REQUIRE(cfg.menuHighlight == "#A8ACB0");
+    REQUIRE(cfg.menuHighlight == "#000000");
     REQUIRE(cfg.menuBorders == "#000000");
 
     // Focus policy - 3 settings.
