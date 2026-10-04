@@ -1745,15 +1745,28 @@ TEST_CASE("every frame colour set over the socket repaints a window already on s
     CHECK(ctlGet(fixture, "tab-foreground") == "#ffff00");
 }
 
-TEST_CASE("the tab bevel is re-derived from the new tab background",
-          "[wm_config_live]")
+TEST_CASE("a live tab-background change repaints the tab and puts no bevel "
+          "shade on screen either side of it", "[wm_config_live]")
 {
-    // The bevel shades are DERIVED from the configured tab background (plan
-    // 08.5-02), which is what makes a dark palette get bevels that belong to it
-    // rather than a fixed near-white line reading as a rendering fault. A
-    // live-applied tab background that left the bevel GCs alone would keep the
-    // old palette's highlight on the new body colour -- visible, and exactly
-    // the defect this case names.
+    // WHAT THIS CASE USED TO MEASURE, and the decision that changed it.
+    //
+    // Plan 08.5-02 derived the bevel shades from the configured tab background,
+    // and this case proved the derivation ran again on a live change: the
+    // shipped highlight was on screen before, the dark palette's own highlight
+    // after. Quick task 261004-vp6 restored the flat look, so nothing draws
+    // with those GCs any more.
+    //
+    // The GCs ARE still allocated and still re-derived on this very change
+    // (src/Border.cpp, the live-apply path) -- the handoff kept them
+    // deliberately. But that re-derivation is NOT externally observable: no
+    // pixel anywhere depends on it. A case cannot assert a structural fact it
+    // has no way to reach, and asserting it through a stand-in would be
+    // asserting something else. So this case asserts the OBSERVABLE truth it
+    // can still reach: the tab repaints in the new body colour, and no bevel
+    // shade -- of either palette -- is on screen before OR after.
+    //
+    // The body colour change is the non-vacuity anchor: a case that only
+    // asserted absences would pass against a blank screen.
     const std::string home = makeConfigHome(
         "frame-thickness=7\ntab-background=#c8cacc\n");
     WmFixture fixture(fixtureWithConfigHome(home));
@@ -1768,39 +1781,52 @@ TEST_CASE("the tab bevel is re-derived from the new tab background",
     REQUIRE(frame != None);
     settleWm(d);
 
-    // The column, not the tab window: the bevel highlight runs down the
-    // column's left edge and the shadow down its right, both inside this
-    // rectangle and neither anywhere else on the frame.
+    // The column, not the tab window: this is the rectangle a bevel highlight
+    // ran down the left edge of and a shadow down the right of, so it is the
+    // rectangle where a returning bevel would appear.
     const Rect tabRect = tabColumnRect(rectOf(d, frame), rectOf(d, client), 7);
     REQUIRE(tabRect.w > 4);
 
-    // The shade WindowManager::allocateShadeOf() produces from the SHIPPED
-    // #C8CACC at +0.76 toward white, and the one it produces from #400000 at
-    // the same fraction. Both MEASURED on this host and written down as
-    // literals rather than recomputed here: doing the blend again in the test
-    // would let the same arithmetic error pass on both sides of the
-    // comparison, which is the whole point of naming an expected value.
+    // The body colours: the configured #c8cacc before, #400000 after.
+    const unsigned long shippedBody = namedPixel(d, "#c8cacc");
+    const unsigned long darkBody     = namedPixel(d, "#400000");
+    // The two shades WindowManager::allocateShadeOf() produces at +0.76 toward
+    // white -- from the SHIPPED #C8CACC and from #400000 respectively. Both
+    // MEASURED on this host and written down as literals rather than
+    // recomputed here: doing the blend again in the test would let the same
+    // arithmetic error pass on both sides. They are the values a returning
+    // bevel would be drawn in, and the right answer for both is zero.
     const unsigned long shippedHighlight = namedPixel(d, "#f2f3f3");
     const unsigned long darkHighlight    = namedPixel(d, "#d1c2c2");
+    REQUIRE(shippedBody      != ~0UL);
+    REQUIRE(darkBody         != ~0UL);
     REQUIRE(shippedHighlight != ~0UL);
     REQUIRE(darkHighlight    != ~0UL);
 
     const Histogram before = captureRoot(d, tabRect);
     INFO("tab before: " << describeTop(before));
-    REQUIRE(countOf(before, shippedHighlight) > 0);
+    // Non-vacuity: the tab is really painted in the configured body colour.
+    REQUIRE(countOf(before, shippedBody) > 0);
+    // Flat before the change.
+    CHECK(countOf(before, shippedHighlight) == 0);
+    CHECK(countOf(before, darkHighlight)    == 0);
 
     CtlResult r = ctl(fixture, {"set", "tab-background", "#400000"});
-    const Histogram after = awaitPixelIn(d, tabRect, darkHighlight, 1);
+    // Wait for the BODY colour, not for a shade: the shade never arrives.
+    const Histogram after = awaitPixelIn(d, tabRect, darkBody, 1);
 
     INFO("wm stderr:\n" << fixture.wmStderr());
     INFO(r.describe());
     INFO("tab after: " << describeTop(after, 12));
 
     CHECK(r.exitCode == 0);
-    // The highlight now belongs to the NEW background...
-    CHECK(countOf(after, darkHighlight) > 0);
-    // ...and the shade derived from the old one is gone.
+    // The tab really repainted: the new body colour is on screen...
+    CHECK(countOf(after, darkBody) > 0);
+    // ...the old one is gone...
+    CHECK(countOf(after, shippedBody) == 0);
+    // ...and still flat afterwards, in either palette's shade.
     CHECK(countOf(after, shippedHighlight) == 0);
+    CHECK(countOf(after, darkHighlight)    == 0);
 }
 
 TEST_CASE("every menu colour set over the socket reaches the next menu opened",

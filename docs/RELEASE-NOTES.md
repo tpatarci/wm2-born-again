@@ -107,19 +107,20 @@ which is what makes it read as metal rather than as concrete. On a 16-bit remote
 session that cast quantises away and you get plain grey, which is simply the
 older look rather than a broken one.
 
-**A one-pixel bevel, on the focused window only.** The tab and its button carry a
-highlight along their top and left edges and a shadow along the bottom and right,
-so the focused window appears very slightly raised. Unfocused windows are flat.
+**Flat surfaces, as the original had them.** The tab, its button and the frame
+are each a single flat colour inside a one-pixel black outline. There is no
+highlight or shadow line along any edge, on the focused window or any other —
+the 1997 wm2 was flat and this release is flat again.
 
-That last point is the useful part: it extends what this window manager already
-did — an unfocused window's frame is hidden, so activity was already something
-you could see — rather than adding a competing colour to keep track of. The
-diagonal at the tab's foot is deliberately left plain, because a bevel following
-a stair-stepped edge is a row of disconnected pixels rather than a highlight.
+Knowing which window has the focus does not need an edge: an unfocused window's
+frame is hidden entirely, so activity is already something you can see, and it
+was that way before any raised edge existed. That is also why there is nothing
+to configure here and no way to get it inconsistent.
 
-The bevel shades are **derived from whichever tab background you configure**, not
-fixed. Set a dark palette and you get bevels that belong to it. There are no
-separate keys to set, and so no way to set them inconsistently.
+The two shades a raised edge would be drawn in are still worked out from
+whichever tab background you configure, so a future look that wants one back
+would get shades belonging to your palette rather than a fixed near-white line.
+Nothing draws with them today.
 
 All nine colours remain configurable in the config file and on the command line,
 and as of this release the two fonts, `tab-font` and `menu-font`, are
@@ -129,7 +130,7 @@ you to go looking for:
 | Key | What it colours |
 |---|---|
 | `tab-foreground` | the title text running down the sideways tab |
-| `tab-background` | the tab itself, and the shades its bevel is derived from |
+| `tab-background` | the tab itself |
 | `frame-background` | the window frame around a focused window |
 | `button-background` | the small button at the top of the tab |
 | `borders` | the outlines of the frame and the tab |
@@ -719,7 +720,7 @@ looking at, at the moment you set it, with no window closing and no restart:
 
 | Setting | What moves |
 |---|---|
-| the nine colours | every frame, tab, button, outline and the next root menu repaint in the new colour; the tab's raised bevel is re-derived from the new tab background, so a dark palette gets bevels that belong to it |
+| the nine colours | every frame, tab, button, outline and the next root menu repaint in the new colour |
 | `frame-thickness` | the geometry of every frame, tab and resize handle already on screen |
 | `tab-font` | every open tab is re-measured and redrawn — the tab gets wider or narrower with the face |
 | `menu-font` | the next root menu's row height |

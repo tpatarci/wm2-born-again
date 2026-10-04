@@ -4455,20 +4455,25 @@ TEST_CASE("The window button answers across the whole tab-top square while "
 
 
 // ===========================================================================
-// [wm_bevel] -- the 1 px raised bevel, and the claim that it is ACTIVE-ONLY
+// [wm_bevel] -- THE FLAT LOOK: no bevel on either tab, active or inactive
 //
-// Plan 08.5-02. The bevel is what carries "discrete, tasteful 3D" in the
-// operator's brief, and its design makes one specific behavioural claim that
-// no palette assertion can check: the active window LIFTS and inactive ones
-// stay flat. That is the WM's existing activity idiom (an inactive frame is
-// shape-subtracted away) extended to the tab, and it is worth pinning, because
-// a bevel drawn unconditionally would look perfectly fine in any screenshot of
-// a single window and would quietly destroy the focus cue on a busy desktop.
+// Quick task 261004-vp6 restored the flat look the 1997 original had. Plan
+// 08.5-02's 1 px raised bevel was active-only, and this case used to pin that
+// asymmetry; the asymmetry is gone because the bevel is gone, so the case now
+// pins its absence on BOTH windows. A changed visual claim gets a changed
+// assertion rather than a deleted case: an edge highlight that crept back in
+// would look plausible in a screenshot and would be nobody's bug report.
 //
-// The shades are DERIVED from the configured tab background rather than
-// hardcoded, so this file names the value the shipped default resolves to.
-// That couples the case to the shipped appearance on purpose: changing the
-// blend is a visual change and should have to be made deliberately.
+// The two shade constants below are KEPT, and they are still correct. The tab
+// background is still #C8CACC and WindowManager::allocateShadeOf() still
+// derives these exact two shades from it at frame construction -- the bevel GCs
+// are still allocated and still re-derived on a live tab-background change.
+// What changed is that nothing draws with them any more, so the shades are the
+// right values to look for and the right answer is zero of each.
+//
+// The focus cue is unaffected: an inactive window's frame is shape-subtracted
+// away, which is how this window manager showed activity before the bevel
+// existed and how it shows it again.
 // ===========================================================================
 
 namespace {
@@ -4480,9 +4485,13 @@ namespace {
 const char* const kBevelHighlight = "#F2F3F3";
 const char* const kBevelShadow    = "#898A8B";
 
+// The shipped tab background, which both tabs are still painted in. Used as
+// the vacuity guard below: it is what proves the sampled rectangle is a tab.
+const char* const kShippedTabBackground = "#C8CACC";
+
 }  // namespace
 
-TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
+TEST_CASE("Neither the active nor the inactive window's tab wears a bevel",
           "[wm_bevel]")
 {
     WmFixture fixture(cleanFixture({}));
@@ -4493,8 +4502,10 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
 
     const unsigned long light  = namedPixel(d, kBevelHighlight);
     const unsigned long shadow = namedPixel(d, kBevelShadow);
+    const unsigned long tabBg  = namedPixel(d, kShippedTabBackground);
     REQUIRE(light  != ~0UL);
     REQUIRE(shadow != ~0UL);
+    REQUIRE(tabBg  != ~0UL);
 
     Window first = None;
     const Window firstFrame =
@@ -4519,9 +4530,24 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
                 activeLight, activeShadow);
     std::fflush(stdout);
 
+    // VACUITY GUARD (a), for the ACTIVE capture. Four `== 0` assertions would
+    // all pass on an empty or mis-aimed capture, so the rectangle has to prove
+    // it is a tab first: a real tab contributes thousands of pixels of the tab
+    // background, and a mis-aimed one contributes none.
+    //
+    // A FLOOR, not a dominance test. The tab window is an L -- a band across
+    // the frame's top and a column down its left, with a stair-stepped
+    // diagonal -- and it is SHAPED, so the root background shows through most
+    // of its bounding rectangle. MEASURED here: ~19900 px of root white
+    // against ~1500 px of tab background, so the dominant pixel of this
+    // capture is the desktop and always was. The 200 floor is the same one
+    // this file's other tab-colour cases use.
     INFO("wm stderr:\n" << fixture.wmStderr());
-    CHECK(activeLight  > 0);
-    CHECK(activeShadow > 0);
+    INFO("active tab histogram: " << describeTop(nullptr, activeTab));
+    REQUIRE(countOf(activeTab, tabBg) > 200);
+
+    CHECK(activeLight  == 0);
+    CHECK(activeShadow == 0);
 
     // --- now make it inactive by mapping a second client --------------
     Window second = None;
@@ -4539,13 +4565,16 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
                 inactiveLight, inactiveShadow);
     std::fflush(stdout);
 
-    // VACUITY GUARD. If the second window never took focus, the first is still
-    // active and the assertion below would be testing nothing. The second
-    // window's own tab must carry the bevel for this comparison to mean
-    // anything.
-    const Histogram secondTab = tabHistogram(secondFrame, second);
-    INFO("second window's own highlight: " << countOf(secondTab, light) << " px");
-    REQUIRE(countOf(secondTab, light) > 0);
+    // VACUITY GUARD (b): the second window really did take focus, so the first
+    // window's tab really is the INACTIVE one. Read from _NET_ACTIVE_WINDOW
+    // rather than inferred from a bevel -- that inference is what the flat look
+    // removed, and the property is what made the comparison meaningful anyway.
+    INFO("_NET_ACTIVE_WINDOW: " << activeWindow(d) << ", second: " << second);
+    REQUIRE(activeWindow(d) == second);
+
+    // VACUITY GUARD (a) again, for the INACTIVE capture.
+    INFO("inactive tab histogram: " << describeTop(nullptr, inactiveTab));
+    REQUIRE(countOf(inactiveTab, tabBg) > 200);
 
     INFO("active " << activeLight << " -> inactive " << inactiveLight);
     CHECK(inactiveLight  == 0);

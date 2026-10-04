@@ -31,11 +31,13 @@ struct Config {
     // neutral gray, which is merely the old look rather than a broken one.
     //
     // The frame is LIGHTER than the tab on purpose. That value order is what
-    // says "lit from above", and together with the 1 px bevel highlight in
-    // Border::drawBevel() it is where the metallic impression comes from. A
-    // banded gradient was considered and rejected: across a ~21 px tab, two or
-    // three bands are ~7 px each, which reads as stripes rather than sheen and
-    // either collapses or visibly bands once VNC quantises it.
+    // says "lit from above", and under the flat look (quick task 261004-vp6)
+    // it is the whole of where the metallic impression comes from: there is no
+    // raised edge any more, so the two flat surfaces and the black outline
+    // between them carry it alone. A banded gradient was considered and
+    // rejected: across a ~21 px tab, two or three bands are ~7 px each, which
+    // reads as stripes rather than sheen and either collapses or visibly bands
+    // once VNC quantises it.
     //
     // Every value keeps black text above 8.8:1 contrast.
     // ------------------------------------------------------------------
