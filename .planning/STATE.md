@@ -5,10 +5,10 @@ current_phase: 09
 current_phase_name: Config GUI + IPC
 status: verifying
 stopped_at: Completed 09-09-PLAN.md
-last_updated: "2026-09-06T16:23:44.946Z"
+last_updated: "2026-10-04T22:29:23.006Z"
 last_activity: 2026-09-06
 last_activity_desc: "Completed 09-08: two CMake install components (wm, config-gui), the no-toolkit manifest gate, and the nogtk build tree with same-suite accounting"
-state_head: 2d281de676ad855beccd411b5c4444b89b4b8f8b
+state_head: 990aa6718c78881e91dec9b2f76d5fa1057e56a6
 progress:
   total_phases: 11
   completed_phases: 4
@@ -242,7 +242,7 @@ Known gate false-negative, recorded so it is not "fixed": `check.decision-covera
   two-digit ID. Coverage verified manually at planning time: all 8 decisions
   (`D-8.5-01`..`-06`, `D-8-TIGHTVNC`, `D-8-X2GO`) are cited by at least one plan;
   `08.5-10` cites six of them.
-Last activity: 2026-09-06 - Completed quick task 260906-ldw: tab label baseline clearance (tab 16 -> 25 px on the default font; knob kTabFrameClearance)
+Last activity: 2026-10-04 - Completed quick task 261004-vp6: flat-look restore (no bevel, frame #F0F1F3, fonts at pixelsize=13, inverted menu bar)
   preserved; next action is executing 08.5-10 alone
 
 Phase 8 closed at `66591ec`, verified with 2 declared gaps (5/7 success criteria).
@@ -477,6 +477,7 @@ Recent decisions affecting current work:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260906-ldw | Tab label baseline clearance: size the rotated tab from a full glyph box and fix the baseline per font so descenders end 5 px short of the frame edge (operator request from the 09-06 screenshot) | 2026-09-06 | 94cfaa3 | [260906-ldw-tab-label-baseline-clearance-size-the-ro](./quick/260906-ldw-tab-label-baseline-clearance-size-the-ro/) |
+| 261004-vp6 | Flat-look restore from the operator's design handoff: the tab and button bevel no longer drawn, frame and button lightened to #F0F1F3, both shipped fonts sized in pixels (DejaVu Sans pixelsize=13) so the tab width no longer depends on the VNC server's DPI, and the menu selection is an inverted black bar with a grey label | 2026-10-04 | 990aa67 | [261004-vp6-flat-look-restore-drop-the-tab-and-butto](./quick/261004-vp6-flat-look-restore-drop-the-tab-and-butto/) |
 
 ### Roadmap Evolution
 
