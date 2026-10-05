@@ -394,6 +394,17 @@ void WindowManager::menu(XButtonEvent *e)
     // followed by the matching redraw. One definition per popup, used by the
     // Expose path and the motion path alike, so a row drawn on hover cannot
     // drift out of step with the same row drawn on exposure.
+    //
+    // THE SELECTED ROW'S LABEL IS INVERTED, and this is the one place that
+    // decides it (quick task 261004-vp6). The selection is a solid bar in the
+    // menu-highlight colour, so its label is drawn in the menu BACKGROUND
+    // colour and every other row's in the menu foreground. Choosing the ink
+    // HERE rather than at each fill site is what keeps the two paths in step:
+    // these lambdas capture the selection variables by reference, so the
+    // Expose repaint and the hover redraw ask the same question and cannot
+    // answer it differently. setOuterSel/setSubSel assign the new selection
+    // BEFORE redrawing the row being left, so that row compares unequal and
+    // correctly gets foreground ink.
     auto drawOuterRowLabel = [&](int i) {
         if (i < 0 || i >= n) return;
         const char* label = outerLabel(i);
@@ -408,7 +419,9 @@ void WindowManager::menu(XButtonEvent *e)
         const int dx = (layout.slotAt(i) == RootMenuSlot::Exit)
                      ? outerW - 8 - static_cast<int>(ext.width)
                      : 8;
-        XftDrawStringUtf8(m_menuDraw.get(), m_menuFgColor.get(),
+        XftColor* ink = (i == outerSel) ? m_menuBgColor.get()
+                                        : m_menuFgColor.get();
+        XftDrawStringUtf8(m_menuDraw.get(), ink,
             m_menuFont, dx, dy, reinterpret_cast<const FcChar8*>(label), len);
     };
 
@@ -419,7 +432,11 @@ void WindowManager::menu(XButtonEvent *e)
         const char* label = (*subEntries)[i].name.c_str();
         const int len = static_cast<int>(std::strlen(label));
         const int dy = r * entryHeight + m_menuFont->ascent + 10;
-        XftDrawStringUtf8(m_submenuDraw.get(), m_menuFgColor.get(),
+        // `i` and subSel are both ABSOLUTE entry indices -- paintSub passes
+        // r + subFirst -- so the comparison needs no scroll offset of its own.
+        XftColor* ink = (i == subSel) ? m_menuBgColor.get()
+                                      : m_menuFgColor.get();
+        XftDrawStringUtf8(m_submenuDraw.get(), ink,
             m_menuFont, 8, dy, reinterpret_cast<const FcChar8*>(label), len);
     };
 

@@ -4,10 +4,22 @@ A modernised resurrection of Chris Cannam's wm2 (1997), adapted for VPS droplets
 reached over VNC or RDP. The sideways-tab look is unchanged and deliberately so;
 the internals underneath it are not.
 
-**Version 1.0.0** is the first released version. It covers everything below: the
+**Version 1.1.0** is the current release. Everything below is in it: the
 appearance and focus work, window rules, the fallback paths for servers missing
 an extension, the configuration file, `wm2-ctl`, and the settings window. See
 [README.md](../README.md) for what the project is and who it is owed to.
+
+What 1.1.0 changed, and it is all appearance: the tab and its button no longer
+carry the one-pixel bevel 1.0.0 drew on the focused window, so both are flat as
+the 1997 original had them; the frame and the button are lighter, `#F0F1F3`
+rather than `#DCDEE0`; both shipped fonts are now sized in PIXELS
+(`DejaVu Sans:bold:pixelsize=13` and `DejaVu Sans:pixelsize=13`) rather than in
+points, so the tab is the same width whatever DPI the remote-desktop server
+reports; and the selected row of the root menu is an inverted bar — a solid
+`menu-highlight` block, now black by default, carrying a label in the menu
+background colour — in place of 1.0.0's grey tint. No key was added or removed.
+A configuration file written for 1.0.0 is read unchanged by 1.1.0, and any
+colour or font you set yourself still wins over every default named here.
 
 These notes cover the behaviour that makes the window manager
 honest about the servers it runs on: what it does when an X extension is missing,
@@ -86,8 +98,16 @@ label is drawn in, `menu-font` the face of the root menu, each taking a
 fontconfig pattern — `Monospace:size=14`, `Noto Sans:bold:size=11` — in the
 config file or on the command line as `--tab-font=` and `--menu-font=`. There is
 no separate size key on purpose: the pattern already carries the size, and two
-ways of saying it could disagree. Leave either unset and you get exactly the
-face the previous release drew, character for character.
+ways of saying it could disagree.
+
+**The defaults are sized in pixels, so a remote session's DPI cannot change
+them.** `size=12` in a fontconfig pattern means twelve *points*, and a point is
+a fraction of an inch — so the actual pixel size depends on the DPI the X
+server reports, and a VNC or RDP server's DPI is not something either of us can
+predict. The same desktop could come up with a noticeably larger tab label on
+one viewer than on another. The shipped defaults now say `pixelsize=13`, which
+means thirteen pixels wherever it runs. A pattern you set yourself can still
+say `size=12` if that is what you want.
 
 A pattern fontconfig cannot resolve is substituted rather than refused, and the
 tab's fallback ladder is deliberately not configurable, so no font value can
@@ -100,26 +120,40 @@ new pattern has no usable face at all, the change is refused and the face you
 had stays loaded — you cannot end up with unlabelled tabs by mistyping a font
 name.
 
-**A silver palette with black text.** The defaults are now a single cool-cast
-family, `#C8CACC` for the tab and menu, `#DCDEE0` for the frame, `#A8ACB0` for
-the menu highlight. Every silver is very slightly blue — two parts per channel —
-which is what makes it read as metal rather than as concrete. On a 16-bit remote
-session that cast quantises away and you get plain grey, which is simply the
-older look rather than a broken one.
+**A silver palette with black text.** The defaults are a single cool-cast
+family, `#C8CACC` for the tab and menu and `#F0F1F3` for the frame and its
+button. Every silver is very slightly blue — the blue channel is the highest of
+the three in each of them — which is what makes it read as metal rather than as
+concrete. On a 16-bit remote session that cast quantises away and you get plain
+grey, which is simply the older look rather than a broken one.
 
-**A one-pixel bevel, on the focused window only.** The tab and its button carry a
-highlight along their top and left edges and a shadow along the bottom and right,
-so the focused window appears very slightly raised. Unfocused windows are flat.
+**Flat surfaces, as the original had them.** The tab, its button and the frame
+are each a single flat colour inside a one-pixel black outline. There is no
+highlight or shadow line along any edge, on the focused window or any other —
+the 1997 wm2 was flat and this release is flat again.
 
-That last point is the useful part: it extends what this window manager already
-did — an unfocused window's frame is hidden, so activity was already something
-you could see — rather than adding a competing colour to keep track of. The
-diagonal at the tab's foot is deliberately left plain, because a bevel following
-a stair-stepped edge is a row of disconnected pixels rather than a highlight.
+Knowing which window has the focus does not need an edge: an unfocused window's
+frame is hidden entirely, so activity is already something you can see, and it
+was that way before any raised edge existed. That is also why there is nothing
+to configure here and no way to get it inconsistent.
 
-The bevel shades are **derived from whichever tab background you configure**, not
-fixed. Set a dark palette and you get bevels that belong to it. There are no
-separate keys to set, and so no way to set them inconsistently.
+The two shades a raised edge would be drawn in are still worked out from
+whichever tab background you configure, so a future look that wants one back
+would get shades belonging to your palette rather than a fixed near-white line.
+Nothing draws with them today.
+
+**The selected menu row is a solid bar, and its label inverts.** The row under
+the pointer — in the root menu and in a category submenu alike — is filled
+solid in the menu highlight colour, and that row's text is redrawn in the menu
+*background* colour so it reads clearly against the fill. Every other row keeps
+its ordinary text colour. The default highlight is `#000000`, so out of the box
+a selected row is a black bar with silver text on it; previously it was a pale
+grey tint with the ordinary text left sitting on top of it.
+
+One consequence worth knowing, since the colours are yours to set: if you set
+`menu-highlight` to the same value as `menu-background`, the bar and its text
+become the same colour and the selected row looks blank. Change either key back
+and it returns.
 
 All nine colours remain configurable in the config file and on the command line,
 and as of this release the two fonts, `tab-font` and `menu-font`, are
@@ -129,13 +163,13 @@ you to go looking for:
 | Key | What it colours |
 |---|---|
 | `tab-foreground` | the title text running down the sideways tab |
-| `tab-background` | the tab itself, and the shades its bevel is derived from |
+| `tab-background` | the tab itself |
 | `frame-background` | the window frame around a focused window |
 | `button-background` | the small button at the top of the tab |
 | `borders` | the outlines of the frame and the tab |
 | `menu-foreground` | the root menu's text |
 | `menu-background` | the root menu's background |
-| `menu-highlight` | the row of the root menu under the pointer |
+| `menu-highlight` | the bar filling the menu row under the pointer; that row's own label inverts to the menu background colour |
 | `menu-borders` | the root menu's border |
 
 Each takes anything the X server can parse — a name like `slategray`, or a
@@ -719,7 +753,7 @@ looking at, at the moment you set it, with no window closing and no restart:
 
 | Setting | What moves |
 |---|---|
-| the nine colours | every frame, tab, button, outline and the next root menu repaint in the new colour; the tab's raised bevel is re-derived from the new tab background, so a dark palette gets bevels that belong to it |
+| the nine colours | every frame, tab, button, outline and the next root menu repaint in the new colour |
 | `frame-thickness` | the geometry of every frame, tab and resize handle already on screen |
 | `tab-font` | every open tab is re-measured and redrawn — the tab gets wider or narrower with the face |
 | `menu-font` | the next root menu's row height |

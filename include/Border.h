@@ -315,21 +315,24 @@ private:
     static bool m_staticsInitialised;
     static x11::GCPtr m_drawGC;
 
-    // The 1 px raised bevel (plan 08.5-02), drawn on the ACTIVE window only.
+    // The two derived shades of plan 08.5-02's 1 px raised bevel. STILL
+    // ALLOCATED, AND NO LONGER DRAWN WITH: quick task 261004-vp6 restored the
+    // flat look the 1997 original had, so both draw functions below are
+    // documented no-ops. The handoff kept these GCs and their derivation
+    // rather than ripping them out; see src/Border.cpp above drawBevel.
     //
-    // ONE PIXEL, NEVER TWO. At this window manager's scale -- a 7 px frame and
-    // a ~22 px tab -- a 2 px bevel is Windows 95. A single pixel inside the
-    // existing 1 px black outline puts four values across about four pixels:
-    // highlight, body, shadow, black. That is the machined-metal read, and it
-    // is the one NeXTSTEP used, which is where wm2's look comes from.
+    // Why a single pixel was the right size when there was one, kept as the
+    // record: at this window manager's scale -- a 7 px frame and a ~22 px tab
+    // -- a 2 px bevel is Windows 95, while one pixel inside the existing 1 px
+    // black outline put four values across about four pixels (highlight, body,
+    // shadow, black). That was the machined-metal read, and it is the one
+    // NeXTSTEP used, which is where wm2's look comes from. The flat look drops
+    // it in favour of the original's plain surfaces; activity is shown the way
+    // it was before 08.5-02, by the frame appearing at all
+    // (setFrameVisibility).
     //
-    // Active-only is a deliberate extension of the WM's existing idiom rather
-    // than a new one: activity already means "the frame appears"
-    // (setFrameVisibility), so now the active window also LIFTS. It costs no
-    // config, no per-state colour, and no second tab background.
-    //
-    // Either GC may be null when the colormap is full. Both draw sites check;
-    // no bevel is the correct degradation, not a fatal error.
+    // Either GC may be null when the colormap is full, which is why that was
+    // never a fatal error.
     static x11::GCPtr m_bevelLightGC;
     static x11::GCPtr m_bevelShadowGC;
     void drawBevel(bool active);

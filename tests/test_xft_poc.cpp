@@ -1,10 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include "x11wrap.h"
+#include "Config.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/shape.h>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 // ---------------------------------------------------------------------------
 // Test 1: Xft font loads by fontconfig pattern (validates VISL-04, A3)
@@ -228,4 +230,86 @@ TEST_CASE("UTF-8 string rendering does not crash", "[xft][poc][utf8]")
     // Cleanup before display destruction
     draw.reset();
     XDestroyWindow(display.get(), window);
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: the SHIPPED font defaults are sized in PIXELS, so a remote session's
+// DPI cannot change the rendered size (quick task 261004-vp6)
+//
+// A fontconfig pattern that says `size=12` says TWELVE POINTS, and a point is
+// 1/72 inch -- so the pixel size fontconfig resolves it to depends on the dpi
+// the pattern or the server reports. A VNC or RDP server's DPI is not ours to
+// predict: the same desktop can come up at 96 on one viewer and 120 on
+// another, and the tab label changes size underneath the user.
+//
+// `pixelsize=13` says thirteen pixels and means it at any DPI. This case
+// measures that, on the defaults the binary actually ships, and it reads them
+// from Config rather than repeating the literals -- so reverting either default
+// to a point-sized pattern reddens it.
+//
+// THE NEGATIVE CONTROL IS HALF THE CASE. Without it the first assertions would
+// also pass on a host or a fontconfig build that ignores the `dpi=` token
+// altogether, which would make this case a test of nothing. MEASURED on this
+// host with fc-match before the case was written: `size=12` resolves to
+// pixelsize 16 at dpi=96 and 20 at dpi=120, `pixelsize=13` to 13 at both.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// ascent+descent of the face fontconfig resolves `pattern` to, or -1 if the
+// pattern could not be loaded at all.
+int faceHeightAt(Display* d, const std::string& pattern, const char* dpi)
+{
+    const std::string withDpi = pattern + ":dpi=" + dpi;
+    auto font = x11::make_xft_font_name(d, withDpi.c_str());
+    if (!font) return -1;
+    return font->ascent + font->descent;
+}
+
+}  // namespace
+
+TEST_CASE("the shipped font defaults measure the same at 96 and 120 dpi",
+          "[xft][dpi]")
+{
+    x11::DisplayPtr display(XOpenDisplay(std::getenv("DISPLAY")));
+    REQUIRE(display);
+    Display* d = display.get();
+
+    const Config defaults;
+
+    // --- the two shipped defaults -------------------------------------------
+    const int tab96  = faceHeightAt(d, defaults.tabFont,  "96");
+    const int tab120 = faceHeightAt(d, defaults.tabFont,  "120");
+    const int menu96  = faceHeightAt(d, defaults.menuFont, "96");
+    const int menu120 = faceHeightAt(d, defaults.menuFont, "120");
+
+    // --- the superseded point-sized spelling, as the control ----------------
+    const std::string control = "DejaVu Sans:bold:size=12";
+    const int ctl96  = faceHeightAt(d, control, "96");
+    const int ctl120 = faceHeightAt(d, control, "120");
+
+    INFO("tab-font default  '" << defaults.tabFont << "': "
+         << tab96 << " px at 96 dpi, " << tab120 << " px at 120 dpi");
+    INFO("menu-font default '" << defaults.menuFont << "': "
+         << menu96 << " px at 96 dpi, " << menu120 << " px at 120 dpi");
+    INFO("control '" << control << "': "
+         << ctl96 << " px at 96 dpi, " << ctl120 << " px at 120 dpi");
+
+    // Every pattern resolved to a real face, or nothing below means anything.
+    REQUIRE(tab96  > 0);
+    REQUIRE(tab120 > 0);
+    REQUIRE(menu96  > 0);
+    REQUIRE(menu120 > 0);
+    REQUIRE(ctl96  > 0);
+    REQUIRE(ctl120 > 0);
+
+    // 1. THE SHIPPED DEFAULTS DO NOT FOLLOW THE DPI.
+    CHECK(tab96  == tab120);
+    CHECK(menu96 == menu120);
+
+    // 2. NEGATIVE CONTROL: the point-sized spelling measurably does. This is
+    //    what proves the `dpi=` token reached fontconfig at all, and therefore
+    //    that assertion 1 is a measurement rather than a tautology.
+    CHECK(ctl96 != ctl120);
+    CHECK(ctl120 > ctl96);
 }

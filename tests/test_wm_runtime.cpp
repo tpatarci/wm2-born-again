@@ -719,10 +719,14 @@ std::string describeTop(Display* d, const Histogram& h, size_t n = 4)
 // MEASURED under ASan: the shipped run and a `--menu-background=#00cc00` run
 // returned the byte-identical histogram
 //     {0xdcdee0 x3000, 0x000000 x1428, 0xc8cacc x512, 0x222222 x17}
-// -- the green run contained NO GREEN AT ALL. 0xDCDEE0 is frameBackground /
-// buttonBackground and 0xC8CACC is tabBackground (include/Config.h), so the
-// dominant pixels were a client FRAME and its sideways TAB. Two different
-// configurations cannot produce identical pixels unless neither was sampled.
+// -- the green run contained NO GREEN AT ALL. The first of those pixel values
+// was the frame/button background default at the time of that measurement
+// (quick task 261004-vp6 raised it to #F0F1F3) and the third is still
+// tabBackground, so the dominant pixels were a client FRAME and its sideways
+// TAB. Two different configurations cannot produce identical pixels unless
+// neither was sampled. The histogram above is left exactly as it was read: it
+// is a measurement, and rewriting its numbers to match today's defaults would
+// make it a story instead.
 //
 // Returning None instead is what makes the poll a poll: it keeps looking until
 // the menu is genuinely mapped, and reports honestly if it never is. Note that
@@ -3452,30 +3456,43 @@ TEST_CASE("A UTF-8 title is not truncated at its first multi-byte character",
 
 
 // ===========================================================================
-// [wm_menulabel] -- the root menu highlight must not erase the row's label
+// [wm_menulabel] -- the selected menu row is an INVERTED BAR, and the bar must
+//                   not erase the row's label
 //
-// Found by the operator's manual XRDP pass and reproduced on plain Xvfb, so it
-// is not remote-desktop-specific. Both of menu()'s drawing paths fill a row
-// rectangle and never redraw the text inside it:
+// TWO CLAIMS, AND BOTH ARE LOAD-BEARING.
 //
-//   MotionNotify -- fills the PREVIOUS row with the background colour (erasing
-//                   its label) and the NEW row with the highlight colour
-//                   (painting over its label). Neither redraws the label.
-//   Expose       -- draws every label in a loop and THEN fills the selected row
-//                   on top of the text it has just drawn.
+// 1. SURVIVAL, which is what this case was originally written for. Found by
+//    the operator's manual XRDP pass and reproduced on plain Xvfb, so it was
+//    never remote-desktop-specific. Both of menu()'s drawing paths used to
+//    fill a row rectangle and never redraw the text inside it:
 //
-// So the row under the pointer goes blank, and the row you just left stays
-// blank. openCategorySubmenu() has the identical pair of bugs.
+//      MotionNotify -- filled the PREVIOUS row with the background colour
+//                      (erasing its label) and the NEW row with the highlight
+//                      colour (painting over its label). Neither redrew it.
+//      Expose       -- drew every label in a loop and THEN filled the selected
+//                      row on top of the text it had just drawn.
+//
+//    So the row under the pointer went blank, and the row you just left stayed
+//    blank. openCategorySubmenu() had the identical pair of bugs.
+//
+// 2. INVERSION, added by quick task 261004-vp6. The selection is now a SOLID
+//    BAR in the highlight colour with its label drawn in the menu BACKGROUND
+//    colour, rather than a tinted band with a foreground label on it. So the
+//    surviving label is counted in the INVERTED ink, and the case carries a
+//    negative half as well: inside the bar there must be NO foreground ink at
+//    all. Without that negative half an implementation that drew the label
+//    twice, once in each colour, would satisfy claim 1 and not be an
+//    inversion.
 //
 // GEOMETRY IS DISCOVERED, NOT ASSUMED. The menu's row height depends on the
 // font and its row COUNT depends on how many applications the host has
 // installed (08-13's flake note), so this case never computes a row rectangle.
-// It finds the highlight fill by its COLOUR -- the bounding box of the
-// configured highlight pixel -- and counts foreground ink strictly inside that
-// box. The box excludes the menu's 1 px border verticals by construction,
-// which matters: the border is drawn in the FOREGROUND colour and would
-// otherwise contribute a constant ~40 px of "ink" to every measurement and mask
-// the very loss this case exists to detect.
+// It finds the bar by its COLOUR -- the bounding box of the configured
+// highlight pixel -- and counts ink strictly inside that box. The box excludes
+// the menu's 1 px border verticals by construction, which matters: the border
+// is drawn in the FOREGROUND colour and would otherwise contribute a constant
+// ~40 px of "ink" to every measurement, mask the loss claim 1 detects, and
+// make the negative half of claim 2 unsatisfiable for the wrong reason.
 //
 // EVERY CAPTURE HAPPENS WHILE BUTTON1 IS HELD. menu() runs a nested event loop
 // under a pointer grab and unmaps the window on release, so a capture taken
@@ -3649,8 +3666,8 @@ bool openRootMenuVerified(Display* d, XTestDriver& driver, int x, int y,
     return false;
 }
 
-TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
-          "does leaving it", "[wm_menulabel]")
+TEST_CASE("A selected root-menu row is a bar carrying an inverted label, and "
+          "the row just left keeps its own", "[wm_menulabel]")
 {
     WmFixture fixture(cleanFixture({"--menu-background=blue",
                                     "--menu-foreground=red",
@@ -3663,15 +3680,19 @@ TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
 
     const unsigned long fg = namedPixel(d, "red");
     const unsigned long hl = namedPixel(d, "green");
+    const unsigned long bg = namedPixel(d, "blue");   // the INVERTED label ink
     REQUIRE(fg != ~0UL);
     REQUIRE(hl != ~0UL);
+    REQUIRE(bg != ~0UL);
     REQUIRE(fg != hl);
+    REQUIRE(bg != hl);
+    REQUIRE(bg != fg);
 
     Window menu = None;
     Rect menuRect;
     std::string why;
     REQUIRE(openRootMenuVerified(d, driver, kMenuPressX, kMenuPressY,
-                                 menu, menuRect, why, namedPixel(d, "blue")));
+                                 menu, menuRect, why, bg));
     // INFO placed AFTER the call, not before it. Catch2 evaluates the
     // streamed expression where the INFO stands, so reading `why` above the
     // call that fills it captured the empty string it still held -- every
@@ -3696,7 +3717,7 @@ TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
     const Bitmap hovered = captureRootBitmap(d, menuRect);
     REQUIRE(hovered.valid());
 
-    // The highlight fill IS the row rectangle. Discovering it by colour avoids
+    // The bar IS the row rectangle. Discovering it by colour avoids
     // recomputing entryHeight, which depends on the font.
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
     REQUIRE(pixelBounds(hovered, hl, x0, y0, x1, y1));
@@ -3753,18 +3774,28 @@ TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
     const Bitmap left = captureRootBitmap(d, menuRect);
     REQUIRE(left.valid());
 
+    // UNSELECTED rows are counted in the FOREGROUND colour; a SELECTED row in
+    // the menu BACKGROUND colour, because that is the ink the bar inverts the
+    // label to. Same glyphs either way, so the magnitudes stay comparable.
     const long inkNormal      = countInBox(before,    fg, x0, y0, x1, y1);
-    const long inkHighlighted = countInBox(hovered,   fg, x0, y0, x1, y1);
-    const long inkReExposed   = countInBox(reExposed, fg, x0, y0, x1, y1);
+    const long inkHighlighted = countInBox(hovered,   bg, x0, y0, x1, y1);
+    const long inkReExposed   = countInBox(reExposed, bg, x0, y0, x1, y1);
     const long inkAfterLeave  = countInBox(left,      fg, x0, y0, x1, y1);
 
-    std::printf("[wm2 menulabel] menu %s, highlight box (%d,%d)-(%d,%d)\n"
-                "[wm2 menulabel]   row 0 label ink, not hovered  %4ld px\n"
-                "[wm2 menulabel]   row 0 label ink, HOVERED      %4ld px\n"
-                "[wm2 menulabel]   row 0 label ink, RE-EXPOSED   %4ld px\n"
-                "[wm2 menulabel]   row 0 label ink, after LEAVE  %4ld px\n",
+    // The negative half of the inversion claim, measured inside the same box.
+    const long fgInBarHovered   = countInBox(hovered,   fg, x0, y0, x1, y1);
+    const long fgInBarReExposed = countInBox(reExposed, fg, x0, y0, x1, y1);
+
+    std::printf("[wm2 menulabel] menu %s, bar box (%d,%d)-(%d,%d)\n"
+                "[wm2 menulabel]   row 0 label, not hovered, FG ink  %4ld px\n"
+                "[wm2 menulabel]   row 0 label, SELECTED,  INV ink   %4ld px\n"
+                "[wm2 menulabel]   row 0 label, RE-EXPOSED, INV ink  %4ld px\n"
+                "[wm2 menulabel]   row 0 label, after LEAVE, FG ink  %4ld px\n"
+                "[wm2 menulabel]   FG ink inside the bar: selected %ld px, "
+                "re-exposed %ld px (both must be 0)\n",
                 describe(menuRect).c_str(), x0, y0, x1, y1,
-                inkNormal, inkHighlighted, inkReExposed, inkAfterLeave);
+                inkNormal, inkHighlighted, inkReExposed, inkAfterLeave,
+                fgInBarHovered, fgInBarReExposed);
     std::fflush(stdout);
 
     // Release before asserting: menu() holds a pointer grab in a nested loop,
@@ -3778,9 +3809,11 @@ TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
     INFO("row 0 ink when not hovered: " << inkNormal << " px");
     REQUIRE(inkNormal > 0);
 
-    // 1. THE HOVERED ROW KEEPS ITS LABEL. Before the fix the highlight fill is
-    //    painted over the text and nothing redraws it: measured ZERO.
-    INFO("ink " << inkNormal << " -> " << inkHighlighted << " while hovered");
+    // 1. THE SELECTED ROW KEEPS ITS LABEL, IN THE INVERTED INK. Before the
+    //    original fix the fill was painted over the text and nothing redrew it:
+    //    measured ZERO. Before the inversion the surviving label was in the
+    //    foreground colour, so this count was zero for a different reason.
+    INFO("ink " << inkNormal << " -> " << inkHighlighted << " while selected");
     CHECK(inkHighlighted > 0);
     CHECK(inkHighlighted * 2 >= inkNormal);
 
@@ -3792,24 +3825,40 @@ TEST_CASE("Highlighting a root-menu row does not erase its label, and neither "
     CHECK(inkReExposed > 0);
     CHECK(inkReExposed * 2 >= inkNormal);
 
-    // 3. AND SO DOES THE ROW YOU JUST LEFT. This is the second half of the same
-    //    defect and it needs its own assertion: a fix that redrew the label only
-    //    on the highlight branch would satisfy (1) and still leave a blank row
-    //    behind the pointer.
+    // 3. AND SO DOES THE ROW YOU JUST LEFT, in its own foreground ink. This is
+    //    the second half of the original defect and it needs its own
+    //    assertion: a fix that redrew the label only on the selected branch
+    //    would satisfy (1) and still leave a blank row behind the pointer.
     INFO("ink " << inkNormal << " -> " << inkAfterLeave << " after leaving");
     CHECK(inkAfterLeave > 0);
     CHECK(inkAfterLeave * 2 >= inkNormal);
 
+    // 4. THE SELECTION IS AN INVERSION, not a tint with the old label on it.
+    //    Zero foreground ink inside the bar, on the hover path and on the
+    //    Expose path alike -- the two paths share one label function precisely
+    //    so they cannot drift apart, and this is what measures that.
+    INFO("foreground ink inside the bar: " << fgInBarHovered << " px selected, "
+         << fgInBarReExposed << " px re-exposed");
+    CHECK(fgInBarHovered   == 0);
+    CHECK(fgInBarReExposed == 0);
+
     CHECK(fixture.wmAlive());
 }
 
-TEST_CASE("Highlighting a category submenu row does not erase its label either",
-          "[wm_menulabel]")
+TEST_CASE("A selected category submenu row is a bar carrying an inverted label "
+          "too", "[wm_menulabel]")
 {
     // openCategorySubmenu() carried the IDENTICAL pair of defects as menu() and
     // was fixed the same way. Without this case both submenu fixes are uncovered
     // branches -- and a symmetric fix applied to two places is exactly the shape
     // of change where one of the two silently gets missed.
+    //
+    // THAT IS ALSO WHY THE INVERSION IS MEASURED HERE AND NOT ASSUMED FROM THE
+    // SHARED CODE PATH. The two popups do share one label function per popup
+    // and one full-repaint function, so a correct change reaches both at once;
+    // but "they share the code" is an argument about the implementation, and
+    // this case is the only place that reads a submenu row's ink off the
+    // screen. It is kept as a measurement.
     //
     // The submenu is only reachable if the host has applications to categorise,
     // and 08-13 warned that menu content is host-dependent. That dependency is
@@ -3827,14 +3876,16 @@ TEST_CASE("Highlighting a category submenu row does not erase its label either",
 
     const unsigned long fg = namedPixel(d, "red");
     const unsigned long hl = namedPixel(d, "green");
+    const unsigned long bg = namedPixel(d, "blue");   // the INVERTED label ink
     REQUIRE(fg != ~0UL);
     REQUIRE(hl != ~0UL);
+    REQUIRE(bg != ~0UL);
 
     Window menu = None;
     Rect menuRect;
     std::string why;
     REQUIRE(openRootMenuVerified(d, driver, kMenuPressX, kMenuPressY,
-                                 menu, menuRect, why, namedPixel(d, "blue")));
+                                 menu, menuRect, why, bg));
     INFO("menu open diagnostics: " << why);
 
     // Row height is MEASURED, not computed: hover row 0 and read back the
@@ -3916,11 +3967,15 @@ TEST_CASE("Highlighting a category submenu row does not erase its label either",
     Bitmap subHovered;
     int sx0 = 0, sy0 = 0, sx1 = 0, sy1 = 0;
     long subInkNormal = 0, subInkHighlighted = 0;
+    long subFgInBar = -1;            // -1 = never measured, which fails below
     if (subHighlighted) {
         subHovered = captureRootBitmap(d, subRect);
         if (pixelBounds(subHovered, hl, sx0, sy0, sx1, sy1)) {
+            // Unselected in the FOREGROUND colour, selected in the menu
+            // BACKGROUND colour -- the ink the bar inverts the label to.
             subInkNormal      = countInBox(subBefore,  fg, sx0, sy0, sx1, sy1);
-            subInkHighlighted = countInBox(subHovered, fg, sx0, sy0, sx1, sy1);
+            subInkHighlighted = countInBox(subHovered, bg, sx0, sy0, sx1, sy1);
+            subFgInBar        = countInBox(subHovered, fg, sx0, sy0, sx1, sy1);
         }
     }
 
@@ -3943,11 +3998,12 @@ TEST_CASE("Highlighting a category submenu row does not erase its label either",
     }
 
     std::printf("[wm2 menulabel] submenu %s\n"
-                "[wm2 menulabel]   row 0 label ink, not hovered  %4ld px\n"
-                "[wm2 menulabel]   row 0 label ink, HOVERED      %4ld px\n"
-                "[wm2 menulabel]   row 0 label ink, after LEAVE  %4ld px\n",
+                "[wm2 menulabel]   row 0 label, not hovered, FG ink  %4ld px\n"
+                "[wm2 menulabel]   row 0 label, SELECTED,  INV ink   %4ld px\n"
+                "[wm2 menulabel]   row 0 label, after LEAVE, FG ink  %4ld px\n"
+                "[wm2 menulabel]   FG ink inside the bar: %ld px (must be 0)\n",
                 describe(subRect).c_str(),
-                subInkNormal, subInkHighlighted, subInkAfterLeave);
+                subInkNormal, subInkHighlighted, subInkAfterLeave, subFgInBar);
     std::fflush(stdout);
 
     // Release well clear of both popups, so no application is launched: a
@@ -3959,7 +4015,8 @@ TEST_CASE("Highlighting a category submenu row does not erase its label either",
 
     REQUIRE(subHighlighted);
     INFO("submenu ink " << subInkNormal << " -> " << subInkHighlighted
-         << " -> " << subInkAfterLeave);
+         << " -> " << subInkAfterLeave
+         << ", foreground inside the bar " << subFgInBar);
     REQUIRE(subInkNormal > 0);                    // positive control
     CHECK(subInkHighlighted > 0);
     CHECK(subInkHighlighted * 2 >= subInkNormal);
@@ -3967,6 +4024,10 @@ TEST_CASE("Highlighting a category submenu row does not erase its label either",
     REQUIRE(subLeft);
     CHECK(subInkAfterLeave > 0);
     CHECK(subInkAfterLeave * 2 >= subInkNormal);
+
+    // The inversion's negative half, for the submenu. -1 means the bar was
+    // never located, which would make every count above meaningless.
+    CHECK(subFgInBar == 0);
 
     CHECK(fixture.wmAlive());
 }
@@ -4455,20 +4516,25 @@ TEST_CASE("The window button answers across the whole tab-top square while "
 
 
 // ===========================================================================
-// [wm_bevel] -- the 1 px raised bevel, and the claim that it is ACTIVE-ONLY
+// [wm_bevel] -- THE FLAT LOOK: no bevel on either tab, active or inactive
 //
-// Plan 08.5-02. The bevel is what carries "discrete, tasteful 3D" in the
-// operator's brief, and its design makes one specific behavioural claim that
-// no palette assertion can check: the active window LIFTS and inactive ones
-// stay flat. That is the WM's existing activity idiom (an inactive frame is
-// shape-subtracted away) extended to the tab, and it is worth pinning, because
-// a bevel drawn unconditionally would look perfectly fine in any screenshot of
-// a single window and would quietly destroy the focus cue on a busy desktop.
+// Quick task 261004-vp6 restored the flat look the 1997 original had. Plan
+// 08.5-02's 1 px raised bevel was active-only, and this case used to pin that
+// asymmetry; the asymmetry is gone because the bevel is gone, so the case now
+// pins its absence on BOTH windows. A changed visual claim gets a changed
+// assertion rather than a deleted case: an edge highlight that crept back in
+// would look plausible in a screenshot and would be nobody's bug report.
 //
-// The shades are DERIVED from the configured tab background rather than
-// hardcoded, so this file names the value the shipped default resolves to.
-// That couples the case to the shipped appearance on purpose: changing the
-// blend is a visual change and should have to be made deliberately.
+// The two shade constants below are KEPT, and they are still correct. The tab
+// background is still #C8CACC and WindowManager::allocateShadeOf() still
+// derives these exact two shades from it at frame construction -- the bevel GCs
+// are still allocated and still re-derived on a live tab-background change.
+// What changed is that nothing draws with them any more, so the shades are the
+// right values to look for and the right answer is zero of each.
+//
+// The focus cue is unaffected: an inactive window's frame is shape-subtracted
+// away, which is how this window manager showed activity before the bevel
+// existed and how it shows it again.
 // ===========================================================================
 
 namespace {
@@ -4480,9 +4546,13 @@ namespace {
 const char* const kBevelHighlight = "#F2F3F3";
 const char* const kBevelShadow    = "#898A8B";
 
+// The shipped tab background, which both tabs are still painted in. Used as
+// the vacuity guard below: it is what proves the sampled rectangle is a tab.
+const char* const kShippedTabBackground = "#C8CACC";
+
 }  // namespace
 
-TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
+TEST_CASE("Neither the active nor the inactive window's tab wears a bevel",
           "[wm_bevel]")
 {
     WmFixture fixture(cleanFixture({}));
@@ -4493,8 +4563,10 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
 
     const unsigned long light  = namedPixel(d, kBevelHighlight);
     const unsigned long shadow = namedPixel(d, kBevelShadow);
+    const unsigned long tabBg  = namedPixel(d, kShippedTabBackground);
     REQUIRE(light  != ~0UL);
     REQUIRE(shadow != ~0UL);
+    REQUIRE(tabBg  != ~0UL);
 
     Window first = None;
     const Window firstFrame =
@@ -4519,9 +4591,24 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
                 activeLight, activeShadow);
     std::fflush(stdout);
 
+    // VACUITY GUARD (a), for the ACTIVE capture. Four `== 0` assertions would
+    // all pass on an empty or mis-aimed capture, so the rectangle has to prove
+    // it is a tab first: a real tab contributes thousands of pixels of the tab
+    // background, and a mis-aimed one contributes none.
+    //
+    // A FLOOR, not a dominance test. The tab window is an L -- a band across
+    // the frame's top and a column down its left, with a stair-stepped
+    // diagonal -- and it is SHAPED, so the root background shows through most
+    // of its bounding rectangle. MEASURED here: ~19900 px of root white
+    // against ~1500 px of tab background, so the dominant pixel of this
+    // capture is the desktop and always was. The 200 floor is the same one
+    // this file's other tab-colour cases use.
     INFO("wm stderr:\n" << fixture.wmStderr());
-    CHECK(activeLight  > 0);
-    CHECK(activeShadow > 0);
+    INFO("active tab histogram: " << describeTop(nullptr, activeTab));
+    REQUIRE(countOf(activeTab, tabBg) > 200);
+
+    CHECK(activeLight  == 0);
+    CHECK(activeShadow == 0);
 
     // --- now make it inactive by mapping a second client --------------
     Window second = None;
@@ -4539,13 +4626,16 @@ TEST_CASE("The active window's tab wears a bevel and an inactive one does not",
                 inactiveLight, inactiveShadow);
     std::fflush(stdout);
 
-    // VACUITY GUARD. If the second window never took focus, the first is still
-    // active and the assertion below would be testing nothing. The second
-    // window's own tab must carry the bevel for this comparison to mean
-    // anything.
-    const Histogram secondTab = tabHistogram(secondFrame, second);
-    INFO("second window's own highlight: " << countOf(secondTab, light) << " px");
-    REQUIRE(countOf(secondTab, light) > 0);
+    // VACUITY GUARD (b): the second window really did take focus, so the first
+    // window's tab really is the INACTIVE one. Read from _NET_ACTIVE_WINDOW
+    // rather than inferred from a bevel -- that inference is what the flat look
+    // removed, and the property is what made the comparison meaningful anyway.
+    INFO("_NET_ACTIVE_WINDOW: " << activeWindow(d) << ", second: " << second);
+    REQUIRE(activeWindow(d) == second);
+
+    // VACUITY GUARD (a) again, for the INACTIVE capture.
+    INFO("inactive tab histogram: " << describeTop(nullptr, inactiveTab));
+    REQUIRE(countOf(inactiveTab, tabBg) > 200);
 
     INFO("active " << activeLight << " -> inactive " << inactiveLight);
     CHECK(inactiveLight  == 0);

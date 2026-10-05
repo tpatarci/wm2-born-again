@@ -73,10 +73,18 @@ Border::Border(Client *client, Window child)
         }
 
         // Bevel GCs (plan 08.5-02). The shades are DERIVED from the configured
-        // tab background, so a user who sets a dark palette gets bevels that
+        // tab background, so a user who sets a dark palette gets shades that
         // belong to it rather than a fixed near-white line that would read as a
         // rendering fault. The fractions reproduce the shipped silver's
         // #F2F4F6 / #898C8F against a #C8CACC body.
+        //
+        // AS OF THE FLAT LOOK (quick task 261004-vp6) THESE SHADES NO LONGER
+        // REACH A PIXEL. They are still allocated here and still re-derived
+        // when the tab background changes on a running desktop, because the
+        // design handoff kept them rather than ripping them out -- but the two
+        // draw functions that consumed them draw nothing now. Nothing
+        // observable from outside depends on this derivation any more; see the
+        // comment above Border::drawBevel's definition.
         const char *tabBg = windowManager()->config().tabBackground.c_str();
         const unsigned long lightPixel =
             windowManager()->allocateShadeOf(tabBg,  0.76, "bevel highlight");
@@ -84,8 +92,9 @@ Border::Border(Client *client, Window child)
             windowManager()->allocateShadeOf(tabBg, -0.315, "bevel shadow");
 
         // A zero pixel means the allocation failed and the GC stays null, which
-        // every draw site treats as "no bevel". Decoration must not be able to
-        // stop the window manager starting.
+        // was always harmless -- it meant no raised edge, and under the flat
+        // look there is none to miss. Decoration must not be able to stop the
+        // window manager starting.
         if (lightPixel != 0) {
             XGCValues bv;
             bv.foreground = lightPixel;
@@ -477,12 +486,18 @@ bool Border::openPalette(WindowManager *wm, const Config &next, Palette &out,
 
     // --- allocate: the bevel shades, DERIVED from the new tab background -----
     //
-    // Re-derived rather than carried over, which is the point of deriving them
-    // at all: a user who sets a dark palette live gets bevels that belong to
+    // Re-derived rather than carried over, which was the point of deriving them
+    // at all: a user who set a dark palette live got shades that belonged to
     // it, instead of the previous palette's near-white highlight sitting on the
     // new body colour and reading as a rendering fault. The two fractions are
     // the ones the constructor uses, spelled once here and once there because
     // they are the same design decision seen from two entry points.
+    //
+    // Under the flat look (quick task 261004-vp6) this re-derivation is kept
+    // and is no longer observable: nothing draws with the result. It still
+    // participates in the allocate-before-release discipline below, so a
+    // tab-background value whose shades will not allocate is still refused as
+    // a whole rather than half-applied.
     unsigned long lightPixel = 0, shadowPixel = 0;
     if (!wm->tryAllocateShadeOf(next.tabBackground.c_str(), 0.76, lightPixel) ||
         !wm->tryAllocateShadeOf(next.tabBackground.c_str(), -0.315, shadowPixel)) {
@@ -508,9 +523,10 @@ bool Border::openPalette(WindowManager *wm, const Config &next, Palette &out,
         return false;
     }
 
-    // A zero pixel means the shade would not allocate, which every draw site
-    // already treats as "no bevel". Not an error: decoration must not be able
-    // to refuse a colour change.
+    // A zero pixel means the shade would not allocate, which leaves the GC
+    // null. That was always harmless -- it meant no raised edge, and under the
+    // flat look there is none to miss. Not an error: decoration must not be
+    // able to refuse a colour change.
     if (lightPixel != 0) {
         XGCValues bv;
         bv.foreground = lightPixel;
@@ -893,84 +909,45 @@ void Border::expose(XExposeEvent *e)
 }
 
 
-// The 1 px raised bevel down the tab (plan 08.5-02). Active windows only.
+// THE FLAT LOOK (quick task 261004-vp6). This draws nothing, deliberately.
 //
-// GEOMETRY. The tab window is L-shaped: a band across the top of the frame and
-// a column down its left side, joined at the corner, with a stair-stepped
-// diagonal closing the bottom (see shapeTab). Three lines describe it as a
-// raised surface:
+// The 1997 original was flat, and the operator's design handoff restored that.
+// Plan 08.5-02's raised edge is gone from the tab and from its button; the
+// focus cue is the frame's own visibility, which is what it was before that
+// plan -- an unfocused window's frame is shape-subtracted away, so activity is
+// already something you can see without a competing edge colour.
 //
-//   - highlight along y=1, across the top band      (lit from above)
-//   - highlight down x=1, the column's left edge    (lit from the left)
-//   - shadow down the column's right inner edge     (the far side falls away)
+// WHAT THE FLAT LOOK DROPPED, kept here as the record rather than as
+// unreachable code behind an early return. The tab window is an L: a band
+// across the top of the frame and a column down its left side, joined at the
+// corner, with a stair-stepped diagonal closing the bottom (see shapeTab).
+// Two segment draws down the tab column and across the top band described it
+// as lit from above and from the left -- a highlight along y=1 across the band,
+// a highlight down x=1 at the column's left edge, and a shadow down the
+// column's right inner edge from below the button notch to the diagonal. The
+// diagonal itself was always left plain, because an edge following a
+// stair-stepped boundary is a row of disconnected pixels rather than a line.
 //
-// THE DIAGONAL IS DELIBERATELY LEFT PLAIN. It is drawn as a stack of one-pixel
-// rectangles, so a bevel following it would be a stair of isolated pixels --
-// jaggies, not a highlight. The black outline already defines that edge, and
-// leaving it alone is what keeps this "discrete" rather than busy.
-//
-// Cost is two XDrawSegments per redraw, which is nothing over VNC. Both GCs may
-// be null if the colormap was full; that is a frame without bevels, which is
-// exactly the old look and not an error.
+// THE FUNCTION AND ITS CALL SITES STAY. So do m_bevelLightGC and
+// m_bevelShadowGC, their allocateShadeOf() derivation at construction, and
+// their live re-derivation on a tab-background change -- the handoff kept them
+// on purpose. The consequence is recorded where they are allocated: the shades
+// are still derived from the configured tab background and no longer reach a
+// pixel. Leaving the empty function in place is also what keeps the six call
+// sites honest: a future look that wants an edge back has one place to put it.
 void Border::drawBevel(bool active)
 {
-    if (isTransient()) return;   // transients have no tab to bevel
-    if (!active) return;         // the active window is the one that lifts
-
-    const int bottom = m_tabHeight;     // where the diagonal begins
-    const int right  = m_tabWidth - 1;
-
-    if (m_bevelLightGC) {
-        XSegment light[2];
-        // Across the top band. Stops at the tab column's width rather than
-        // running the full band: past that point the band is one pixel below
-        // the frame's own top edge and a line there reads as a seam.
-        light[0].x1 = 1;  light[0].y1 = 1;
-        light[0].x2 = right; light[0].y2 = 1;
-        // Down the column's left edge, stopping short of the diagonal.
-        light[1].x1 = 1;  light[1].y1 = 1;
-        light[1].x2 = 1;  light[1].y2 = bottom;
-        XDrawSegments(display(), m_tab, m_bevelLightGC.get(), light, 2);
-    }
-
-    if (m_bevelShadowGC) {
-        XSegment shadow[1];
-        // The column's right inner edge, from below the button notch down to
-        // the diagonal. Starting at m_tabWidth rather than at the top avoids
-        // drawing across the notch the button sits in.
-        shadow[0].x1 = right; shadow[0].y1 = m_tabWidth;
-        shadow[0].x2 = right; shadow[0].y2 = bottom;
-        XDrawSegments(display(), m_tab, m_bevelShadowGC.get(), shadow, 1);
-    }
+    (void)active;
 }
 
 
-// The same treatment for the small square button at the tab's top, so it reads
-// as a raised key rather than a painted patch. Same active-only rule: on an
-// inactive client the button is not even mapped.
+// The same for the small square button at the tab's top: flat, like the tab it
+// sits on. It was previously drawn as a raised key -- a highlight along the top
+// and left edges and a shadow along the bottom and right of a buttonDrawSize()
+// square -- and on an inactive client the button is not mapped at all.
 void Border::drawButtonBevel(bool active)
 {
-    if (isTransient()) return;
-    if (!active) return;
-
-    const int size = buttonDrawSize();
-    if (size <= 2) return;   // too small to bevel legibly; leave it flat
-
-    if (m_bevelLightGC) {
-        XSegment light[2];
-        light[0].x1 = 0; light[0].y1 = 0; light[0].x2 = size - 1; light[0].y2 = 0;
-        light[1].x1 = 0; light[1].y1 = 0; light[1].x2 = 0;        light[1].y2 = size - 1;
-        XDrawSegments(display(), m_button, m_bevelLightGC.get(), light, 2);
-    }
-
-    if (m_bevelShadowGC) {
-        XSegment shadow[2];
-        shadow[0].x1 = 0;        shadow[0].y1 = size - 1;
-        shadow[0].x2 = size - 1; shadow[0].y2 = size - 1;
-        shadow[1].x1 = size - 1; shadow[1].y1 = 0;
-        shadow[1].x2 = size - 1; shadow[1].y2 = size - 1;
-        XDrawSegments(display(), m_button, m_bevelShadowGC.get(), shadow, 2);
-    }
+    (void)active;
 }
 
 
@@ -998,8 +975,9 @@ void Border::drawLabel(bool active)
     XftDrawRect(m_tabDraw.get(), &m_xftBackground, 0, 0,
                 m_tabWidth, m_tabHeight + m_tabWidth);
 
-    // The bevel goes on after the background fill and BEFORE the label, so text
-    // is never drawn under a line. Active windows only.
+    // Kept in its original position -- after the background fill and before the
+    // label, which is where any future edge treatment would have to go so text
+    // is never drawn under a line. Under the flat look it draws nothing.
     drawBevel(active);
 
     // Rung 3: an unrotated face cannot be drawn down the tab, so it is drawn
@@ -1594,12 +1572,15 @@ void Border::configure(int x, int y, int w, int h,
                          EnterWindowMask);
         }
 
-        // ExposureMask added in plan 08.5-02. The button was previously drawn
-        // entirely by the server from its background pixel, so it never needed
-        // to hear about exposure. Now it carries a bevel this code draws, and
-        // anything the server repaints from the background -- an unobscure, a
-        // resize, a VNC client reconnecting -- would wipe that bevel with no
-        // event to put it back.
+        // ExposureMask added in plan 08.5-02, when the button carried an edge
+        // this code drew: before that the button was drawn entirely by the
+        // server from its background pixel and never needed to hear about
+        // exposure. Under the flat look it is back to being a plain painted
+        // patch, so the mask is no longer load-bearing for the button's own
+        // appearance -- it is kept because the exposure handler is the one
+        // place a future treatment would be repainted from, and because
+        // removing a selected event mask is a behaviour change this task did
+        // not ask for.
         XSelectInput(display(), m_button,
                      ExposureMask | ButtonPressMask | ButtonReleaseMask);
         XSelectInput(display(), m_resize, ButtonPressMask | ButtonReleaseMask);
@@ -1791,11 +1772,12 @@ void Border::decorate(bool active, int w, int h)
 {
     setFrameVisibility(active, w, h);
 
-    // Activity is what decides whether this window wears bevels at all, and
-    // this is the one place that learns activity changed -- so both surfaces
-    // are repainted here. drawLabel() redraws the tab background before the
-    // bevel, so a window losing focus loses its highlight rather than keeping a
-    // stale one.
+    // This is the one place that learns activity changed, so both surfaces are
+    // repainted here. Under the flat look neither surface has an active-only
+    // treatment left to add or remove -- the frame's own visibility is the
+    // focus cue -- but the repaint stays: drawLabel() is what redraws the tab
+    // background and the label, and the button paint is what the second call
+    // keeps in step with it.
     if (!isTransient()) {
         drawLabel(active);
         drawButtonBevel(active);
@@ -2087,11 +2069,13 @@ void Border::runButtonPress(XButtonEvent *e, int startX, int startY)
         }
     }
 
-    // The clear wipes the press feedback AND the bevel with it, so the bevel is
-    // put back. Without this the button silently goes flat after its first
-    // press and stays flat for the window's whole life -- a decoration bug that
-    // only appears after an interaction, which is the kind nobody notices in a
-    // screenshot.
+    // The clear wipes the press feedback, and the repaint that follows is what
+    // puts the button's own drawing back. Under the flat look the button has
+    // nothing but its background pixel to restore and the clear alone is
+    // enough; the call stays because this is the paint path after a press, and
+    // when it was not here the button went permanently flat after its first
+    // press -- a decoration bug that only appears after an interaction, which
+    // is the kind nobody notices in a screenshot.
     XClearWindow(display(), m_button);
     drawButtonBevel(m_client->isActive());
     windowManager()->installCursor(WindowManager::RootCursor::Normal);

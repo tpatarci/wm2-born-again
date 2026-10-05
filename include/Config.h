@@ -25,32 +25,58 @@ struct Config {
     // gray80/gray95 defaults the project carried from upstream.
     //
     // THE COOL CAST IS THE WHOLE TRICK, and it is deliberate: every silver
-    // below has R < G < B by 2 per channel. That reads as aluminium rather
-    // than concrete, costs exactly nothing to draw, and degrades gracefully --
-    // a 16-bit VNC session (RGB565) quantises the cast away and leaves plain
+    // below has R < G < B, so each one reads as aluminium rather than
+    // concrete. It costs exactly nothing to draw and degrades gracefully -- a
+    // 16-bit VNC session (RGB565) quantises the cast away and leaves plain
     // neutral gray, which is merely the old look rather than a broken one.
     //
-    // The frame is LIGHTER than the tab on purpose. That value order is what
-    // says "lit from above", and together with the 1 px bevel highlight in
-    // Border::drawBevel() it is where the metallic impression comes from. A
-    // banded gradient was considered and rejected: across a ~21 px tab, two or
-    // three bands are ~7 px each, which reads as stripes rather than sheen and
-    // either collapses or visibly bands once VNC quantises it.
+    // THE STEP IS NOT UNIFORM, and the arithmetic is written out here rather
+    // than left as an almost-true rule of thumb. Counted channel by channel:
+    // #C8CACC steps by 2 and 2; #F0F1F3, the lighter frame quick task
+    // 261004-vp6 introduced, steps by 1 and 2. The direction is what the
+    // family shares; the size of the step is not, and a comment claiming "by 2
+    // per channel" was false of the values it covered.
     //
-    // Every value keeps black text above 8.8:1 contrast.
+    // menuHighlight IS NOT A SILVER AND IS NOT A TINT. The selected menu row
+    // is a solid BAR (quick task 261004-vp6), and its label is drawn in
+    // menuBackground rather than menuForeground -- an inversion, not a shade
+    // behind unchanged text. Black is the default, which makes it equal to
+    // menuForeground; that is fine, because the selected row's text is the
+    // only thing drawn inside the bar and it uses the other colour.
+    //
+    // THE ONE SELF-INFLICTED WAY TO BREAK IT, named once rather than guarded:
+    // set menu-highlight equal to menu-background and your own selected label
+    // becomes invisible, because the bar and its ink are then the same colour.
+    // Reversible by changing one key, already reachable for any self-inverting
+    // palette, and a validator rejecting equal colours would be a policy about
+    // taste rather than a correctness check.
+    //
+    // The frame is LIGHTER than the tab on purpose. That value order is what
+    // says "lit from above", and under the flat look (quick task 261004-vp6)
+    // it is the whole of where the metallic impression comes from: there is no
+    // raised edge any more, so the two flat surfaces and the black outline
+    // between them carry it alone. A banded gradient was considered and
+    // rejected: across a ~21 px tab, two or three bands are ~7 px each, which
+    // reads as stripes rather than sheen and either collapses or visibly bands
+    // once VNC quantises it.
+    //
+    // Every surface that carries black text keeps it above 8.8:1 contrast.
+    // The menu-highlight bar is the exception by construction: it carries no
+    // black text, because its label is drawn in menuBackground -- #C8CACC on
+    // black, which is about 12.8:1.
     // ------------------------------------------------------------------
 
     // Colors (tab)
     std::string tabForeground   = "#000000";
     std::string tabBackground   = "#C8CACC";
     // Colors (frame)
-    std::string frameBackground = "#DCDEE0";
-    std::string buttonBackground = "#DCDEE0";
+    std::string frameBackground = "#F0F1F3";
+    std::string buttonBackground = "#F0F1F3";
     std::string borders         = "#000000";
     // Colors (menu)
     std::string menuForeground  = "#000000";
     std::string menuBackground  = "#C8CACC";
-    std::string menuHighlight   = "#A8ACB0";
+    std::string menuHighlight   = "#000000";
     std::string menuBorders     = "#000000";
 
     // ------------------------------------------------------------------
@@ -69,23 +95,46 @@ struct Config {
     // would be a second way of saying something the pattern already says, and
     // the two could disagree.
     //
-    // DISC-05b: each default IS the literal the binary hardcoded before this
-    // plan, character for character. A user with no config file sees no change
-    // whatsoever, which is the entire promise this plan makes to them. Change
-    // one of these strings and you have changed the shipped look of the window
-    // manager, not merely a default.
+    // SIZED IN PIXELS, NOT POINTS (quick task 261004-vp6). A pattern that says
+    // size=12 says twelve POINTS, and a point is 1/72 inch, so the pixel size
+    // fontconfig resolves it to follows whatever DPI the server reports. A VNC
+    // or RDP server's DPI is not ours to predict: MEASURED with fc-match,
+    // size=12 resolves to pixelsize 16 at 96 dpi and 20 at 120 dpi, so the
+    // same desktop came up with a visibly different tab label depending on the
+    // viewer. pixelsize=13 says thirteen pixels and means it at any DPI, which
+    // is what a window manager sized in pixels everywhere else should have
+    // said all along. Pinned by the DPI case in tests/test_xft_poc.cpp, with
+    // the old point-sized spelling kept there as its negative control.
+    //
+    // DISC-05b IS SUPERSEDED AND WAS THE MOST MISLEADING SENTENCE IN THIS
+    // FILE. It said each default IS the literal the binary hardcoded, character
+    // for character, and that a user with no config file sees no change
+    // whatsoever. That stopped being true here. The literals it described,
+    // recorded so the change is legible:
+    //     tab-font   Ubuntu,Noto Sans,DejaVu Sans,Sans:bold:size=12
+    //     menu-font  Ubuntu,Noto Sans,DejaVu Sans,Sans:size=12
+    // A user with no config file DOES see a change: a slightly smaller, DejaVu
+    // label at a size that no longer moves with the server.
+    //
+    // WHY DejaVu RATHER THAN THE OLD FAMILY LIST: fonts-dejavu-core is on every
+    // Ubuntu image including the minimal VPS ones this window manager targets,
+    // so the shipped default resolves to a real readable file without
+    // depending on a desktop font package being present. The four-rung
+    // fallback ladder is untouched and still catches a host where even that is
+    // missing.
     //
     // D-8.5-01: `tab-font` and `menu-font` are permanent spellings. Key names are
     // free to choose before v1.0 and fixed after, and there will be no
     // deprecated aliases.
     //
-    // The two differ by exactly one token: the tab is drawn BOLD and the menu is
-    // not. That is not an oversight to tidy up -- bold survives a RENDER-less
-    // remote server where lighter weights go ragged (measured, 08.5-02), and the
-    // tab label is the text that has to stay legible sideways at 12 px.
+    // The two still differ by exactly one token: the tab is drawn BOLD and the
+    // menu is not. That is not an oversight to tidy up -- bold survives a
+    // RENDER-less remote server where lighter weights go ragged (measured,
+    // 08.5-02), and the tab label is the text that has to stay legible
+    // sideways.
     // ------------------------------------------------------------------
-    std::string tabFont  = "Ubuntu,Noto Sans,DejaVu Sans,Sans:bold:size=12";
-    std::string menuFont = "Ubuntu,Noto Sans,DejaVu Sans,Sans:size=12";
+    std::string tabFont  = "DejaVu Sans:bold:pixelsize=13";
+    std::string menuFont = "DejaVu Sans:pixelsize=13";
 
     // Focus policy
     //

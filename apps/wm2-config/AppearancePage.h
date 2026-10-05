@@ -154,11 +154,11 @@ bool configCanonicalColour(const std::string& spelling, std::string& out);
 
 // The OTHER pair of vocabularies, converted in ONE place.
 //
-// The toolkit speaks Pango font descriptions ("Ubuntu Bold 12"); the config
-// file and the window manager speak fontconfig patterns
-// ("Ubuntu,Noto Sans,DejaVu Sans,Sans:bold:size=12"). Both the chooser and the
-// raw field go through this pair, because two conversions are how two spellings
-// of one font start disagreeing.
+// The toolkit speaks Pango font descriptions ("DejaVu Sans Bold 12"); the
+// config file and the window manager speak fontconfig patterns
+// ("DejaVu Sans:bold:pixelsize=13"). Both the chooser and the raw field go
+// through this pair, because two conversions are how two spellings of one font
+// start disagreeing.
 //
 // The conversion is LOSSY IN ONE DIRECTION and deliberately so: a fontconfig
 // pattern can name a fallback LIST of families and a Pango description cannot,

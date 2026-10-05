@@ -188,8 +188,10 @@ if command -v fc-match >/dev/null 2>&1; then
     # src/Border.cpp (XDIS-04). It is checked here rather than asserted in a
     # comment, because that rung is what stands between a font-poor target and
     # a window manager with no labels at all.
-    for pattern in "Noto Sans,DejaVu Sans,Sans:size=12" \
-                   "Noto Sans,DejaVu Sans,Sans:bold:size=12" \
+    # The first two are the shipped menu-font and tab-font defaults from
+    # include/Config.h, sized in pixels since quick task 261004-vp6.
+    for pattern in "DejaVu Sans:pixelsize=13" \
+                   "DejaVu Sans:bold:pixelsize=13" \
                    "sans-serif:bold:size=12"; do
         # fc-match exits 0 even when it resolves nothing useful, so require a
         # non-empty result naming a real font file.

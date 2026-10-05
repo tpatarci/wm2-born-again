@@ -255,18 +255,20 @@ DPYINFO=$(DISPLAY="$DISPLAY_NAME" xdpyinfo 2>&1)
 
     # -- fontconfig ---------------------------------------------------------
     #
-    # The exact patterns src/Manager.cpp and src/Border.cpp ask for, plus the
-    # generic rung each of them falls back to. A remote target that resolves
-    # none of these has no window titles at all, which is the failure mode the
-    # checklist's Xft line is about.
+    # The two shipped defaults the WM asks for first, plus the generic rung each
+    # of its ladders falls back to. A remote target that resolves none of these
+    # has no window titles at all, which is the failure mode the checklist's Xft
+    # line is about. The two generic rungs keep their point size on purpose:
+    # decision 09-01 froze those literals, because a fallback the user can also
+    # break is not a fallback.
     section "fontconfig resolution (the patterns the WM actually requests)"
     if have fc-match; then
-        echo "  menu font (src/Manager.cpp:626):"
-        echo "    'Noto Sans,DejaVu Sans,Sans:size=12'"
-        echo "      -> $(fc-match --format='%{family} :: %{file}' 'Noto Sans,DejaVu Sans,Sans:size=12' 2>&1 || echo 'UNRESOLVED')"
-        echo "  tab font, rotated (src/Border.cpp:184):"
-        echo "    'Noto Sans,DejaVu Sans,Sans:bold:size=12'"
-        echo "      -> $(fc-match --format='%{family} :: %{file}' 'Noto Sans,DejaVu Sans,Sans:bold:size=12' 2>&1 || echo 'UNRESOLVED')"
+        echo "  menu font (the menu-font default in include/Config.h):"
+        echo "    'DejaVu Sans:pixelsize=13'"
+        echo "      -> $(fc-match --format='%{family} :: %{file}' 'DejaVu Sans:pixelsize=13' 2>&1 || echo 'UNRESOLVED')"
+        echo "  tab font, rotated (the tab-font default in include/Config.h):"
+        echo "    'DejaVu Sans:bold:pixelsize=13'"
+        echo "      -> $(fc-match --format='%{family} :: %{file}' 'DejaVu Sans:bold:pixelsize=13' 2>&1 || echo 'UNRESOLVED')"
         echo "  generic fallback rungs (src/Manager.cpp:628, src/Border.cpp:190):"
         echo "    'sans-serif:size=12'"
         echo "      -> $(fc-match --format='%{family} :: %{file}' 'sans-serif:size=12' 2>&1 || echo 'UNRESOLVED')"
