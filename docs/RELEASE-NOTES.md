@@ -4,10 +4,22 @@ A modernised resurrection of Chris Cannam's wm2 (1997), adapted for VPS droplets
 reached over VNC or RDP. The sideways-tab look is unchanged and deliberately so;
 the internals underneath it are not.
 
-**Version 1.0.0** is the first released version. It covers everything below: the
+**Version 1.1.0** is the current release. Everything below is in it: the
 appearance and focus work, window rules, the fallback paths for servers missing
 an extension, the configuration file, `wm2-ctl`, and the settings window. See
 [README.md](../README.md) for what the project is and who it is owed to.
+
+What 1.1.0 changed, and it is all appearance: the tab and its button no longer
+carry the one-pixel bevel 1.0.0 drew on the focused window, so both are flat as
+the 1997 original had them; the frame and the button are lighter, `#F0F1F3`
+rather than `#DCDEE0`; both shipped fonts are now sized in PIXELS
+(`DejaVu Sans:bold:pixelsize=13` and `DejaVu Sans:pixelsize=13`) rather than in
+points, so the tab is the same width whatever DPI the remote-desktop server
+reports; and the selected row of the root menu is an inverted bar — a solid
+`menu-highlight` block, now black by default, carrying a label in the menu
+background colour — in place of 1.0.0's grey tint. No key was added or removed.
+A configuration file written for 1.0.0 is read unchanged by 1.1.0, and any
+colour or font you set yourself still wins over every default named here.
 
 These notes cover the behaviour that makes the window manager
 honest about the servers it runs on: what it does when an X extension is missing,

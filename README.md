@@ -4,7 +4,7 @@ A minimal X11 window manager with sideways tabs, for a VPS you reach over VNC or
 RDP. It is a modernised resurrection of **wm2**, written by **Chris Cannam** in
 1997.
 
-![licence MIT](https://img.shields.io/badge/licence-MIT-blue) ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue) ![tests 614](https://img.shields.io/badge/tests-614-brightgreen)
+![licence MIT](https://img.shields.io/badge/licence-MIT-blue) ![C++17](https://img.shields.io/badge/C%2B%2B-17-blue) ![tests 615](https://img.shields.io/badge/tests-615-brightgreen)
 
 ## Why this exists
 

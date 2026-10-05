@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.20)
 # needs ctest >= 3.20. Declaring an older floor would make a 3.16-3.18 builder
 # fail at configure time with an opaque string(JSON) error instead of a named
 # cause -- exactly the failure mode scripts/preflight.sh exists to eliminate.
-project(wm2-born-again VERSION 1.0.0 LANGUAGES CXX)
+project(wm2-born-again VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
